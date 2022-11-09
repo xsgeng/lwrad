@@ -1,0 +1,9 @@
+[project]
+name = "pylw"
+version = "0.0"
+dependencies = [
+    "numpy",
+    "numba",
+    "scipy",
+]
+requires-python = ">=3.7"
