@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from lw import c, pi, get_lw_field, get_lw_spectrum
+from lw import c, pi, get_lw_RE, get_RE_spectrum, get_lw_spectrum
 
 class TestSpectrum(unittest.TestCase):
     def test_thomson(self):
@@ -24,10 +24,7 @@ class TestSpectrum(unittest.TestCase):
         omega_axis = np.linspace(0, 3, nomega) * 4*gamma0**2*omega0
 
         n = [1, 0, 0]
-        t_ret, Ex, Ey, Ez = get_lw_field(x, y, z, ux, uy, uz, t, n)
-        Ez_ft = get_lw_spectrum(Ez, t_ret, omega_axis)
-
-        I = (Ez_ft.real**2 + Ez_ft.imag**2) 
-        I *= 2
         
+        I = get_lw_spectrum(x, y, z, ux, uy, uz, t, n, omega_axis)
+        print(I.max())
         self.assertAlmostEqual(I.max(), 1.7e-34, 2)
