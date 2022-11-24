@@ -95,14 +95,14 @@ ax.set_title(rf'$a_0$={a0},$\gamma_0$={gamma0}')
 ![](tests/thomson.png)
 结果对比[Richard (2012)](https://doi.org/10.5281/zenodo.843510) Figure 2.7(a)
 
-### 计算辐射电场$R\cdot \bf{E}$
+### 计算辐射电场$`R\cdot \bf{E}`$
 ```python
 from lw import get_lw_RE
 
 t_ret, REx, REy, REz = get_lw_RE(x, y, z, ux, uy, uz, t, n)
 ```
 
-### 由$R\cdot \bf{E}$计算辐射谱
+### 由$`R\cdot \bf{E}`$计算辐射谱
 ```python
 from lw import get_RE_spectrum
 
