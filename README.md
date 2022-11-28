@@ -1,24 +1,24 @@
 ## 安装方法
----
-克隆仓库
+
+### 克隆仓库
 ```bash
 git clone http://172.16.95.131/gengxs/pylw.git
 ```
 
-用户安装
+然后用户安装
 ```bash
 cd pylw
 # editable install
 pip install --user -e .
 ```
 
-直接安装
+### 直接安装
 ```bash
 pip install --user git+http://172.16.95.131/gengxs/pylw.git
 ```
 
 ## 用法
----
+
 这里以Smilei输出的轨迹为例
 ```python
 import h5py
