@@ -39,27 +39,47 @@ def get_lw_RE(x, y, z, ux, uy, uz, t, n):
         ny /= n_norm
         nz /= n_norm
 
+    return _calc_lw(x, y, z, ux, uy, uz, t, nx, ny, nz)
 
-    t_ret = t - (nx*x + ny*y + nz*z) / c
 
+@njit(parallel=True)
+def _calc_lw(x, y, z, ux, uy, uz, t, nx, ny, nz):
+    nt = len(t)
+    t_ret = np.zeros(nt-2)
+    REx = np.zeros(nt-2)
+    REy = np.zeros(nt-2)
+    REz = np.zeros(nt-2)
+    for it in prange(1, nt-1):
+
+        t_ret[it-1] = t[it] - (nx*x[it] + ny*y[it] + nz*z[it]) / c
+
+        betax, betay, betaz = _calc_beta(ux[it], uy[it], uz[it])
+        betax_prev, betay_prev, betaz_prev = _calc_beta(ux[it-1], uy[it-1], uz[it-1])
+        betax_next, betay_next, betaz_next = _calc_beta(ux[it+1], uy[it+1], uz[it+1])
+
+        dt = t[it+1] - t[it-1]
+        # 加速度，假设首尾加速度为0
+        ax = (betax_next - betax_prev) / dt
+        ay = (betay_next - betay_prev) / dt
+        az = (betaz_next - betaz_prev) / dt
+
+        n_dot_a = nx*ax + ny*ay + nz*az
+        n_dot_beta = nx*betax + ny*betay + nz*betaz
+        factor = 1 / (1 - n_dot_beta)**3
+        factor *= e / (4*pi*epsilon_0*c)
+
+        REx[it-1] = (n_dot_a*(nx - betax) + (n_dot_beta - 1) * ax) * factor
+        REy[it-1] = (n_dot_a*(ny - betay) + (n_dot_beta - 1) * ay) * factor
+        REz[it-1] = (n_dot_a*(nz - betaz) + (n_dot_beta - 1) * az) * factor
+    return t_ret, REx, REy, REz
+
+@njit
+def _calc_beta(ux, uy, uz):
     inv_gamma = 1 / np.sqrt(ux**2 + uy**2 + uz**2 + 1)
     betax = ux * inv_gamma
     betay = uy * inv_gamma
     betaz = uz * inv_gamma
-    # 加速度，假设首尾加速度为0
-    ax = np.concatenate(([0], (betax[2:] - betax[:-2])/(t[2:] - t[:-2]), [0]))
-    ay = np.concatenate(([0], (betay[2:] - betay[:-2])/(t[2:] - t[:-2]), [0]))
-    az = np.concatenate(([0], (betaz[2:] - betaz[:-2])/(t[2:] - t[:-2]), [0]))
-
-    n_dot_a = nx*ax + ny*ay + nz*az
-    n_dot_beta = nx*betax + ny*betay + nz*betaz
-    factor = 1 / (1 - n_dot_beta)**3
-    factor *= e / (4*pi*epsilon_0*c)
-
-    REx = (n_dot_a*(nx - betax) + (n_dot_beta - 1) * ax) * factor
-    REy = (n_dot_a*(ny - betay) + (n_dot_beta - 1) * ay) * factor
-    REz = (n_dot_a*(nz - betaz) + (n_dot_beta - 1) * az) * factor
-    return t_ret, REx, REy, REz
+    return betax, betay, betaz
 
 
 @njit(parallel=True)
@@ -76,12 +96,13 @@ def get_RE_spectrum(RE, t_ret, omega_axis):
     '''
     nomega = len(omega_axis)
     RE_ft = np.zeros(nomega, dtype=np.complex128)
+    norm = 1 / np.sqrt(c*mu_0) / np.sqrt(2*pi)
     
     # definition of Fourier transformation
     for i in prange(nomega):
         w = omega_axis[i]
         # trapzoid integral
-        RE_ft[i] = np.trapz(RE * np.exp(1j*w*t_ret), t_ret) / np.sqrt(c*mu_0) / np.sqrt(2*pi)
+        RE_ft[i] = np.trapz(RE * np.exp(1j*w*t_ret), t_ret) * norm
 
     # normalize
     return RE_ft

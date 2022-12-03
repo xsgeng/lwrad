@@ -1,6 +1,7 @@
 import unittest
 import numpy as np
 from lw import c, pi, get_lw_RE, get_RE_spectrum, get_lw_spectrum
+from timeit import timeit
 
 class TestSpectrum(unittest.TestCase):
     l0 = 8e-7
@@ -34,18 +35,17 @@ class TestSpectrum(unittest.TestCase):
         self.assertAlmostEqual(I.max(), 1.7e-34, 2)
 
 
-    def test_nan(self):
+    def test_lw_RE(self):
         args = [np.concatenate(([np.nan]*10, x, [np.nan]*10) ) for x in self.dummy_thomson()]
-
-        omega0 = self.omega0
-        nomega = 256
-        gamma0 = 5.0
-        omega_axis = np.linspace(0, 3, nomega) * 4*gamma0**2*omega0
-
-        n = [1, 0, 0]
         # test warn once
         with self.assertWarns(UserWarning):
-            I = get_lw_spectrum(*args, n, omega_axis)
+            ret = get_lw_RE(*args, [1, 0, 0])
         
-        self.assertNotIn(np.nan, I)
-        self.assertAlmostEqual(I.max(), 1.7e-34, 2)
+        for ret_ in ret:
+            self.assertNotIn(np.nan, ret_)
+
+    def test_speed(self):
+        args = self.dummy_thomson()
+        n = [1, 0, 0]
+        dt = timeit(lambda: get_lw_RE(*args, n), number=100)
+        print(f"get_lw_RE: {dt*1000:.0f} ms/call")
