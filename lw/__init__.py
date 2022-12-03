@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.constants import pi, m_e, e, c, alpha, hbar, epsilon_0, mu_0
 from numba import njit, prange
+from warnings import warn
 
 def get_lw_RE(x, y, z, ux, uy, uz, t, n):
     '''
@@ -17,6 +18,17 @@ def get_lw_RE(x, y, z, ux, uy, uz, t, n):
     n : tuple | list | ndarray
         长度为1的方向矢量
     '''
+
+    if np.isnan(x).any():
+        warn("NaN values detected in input vector. Discarded continue.")
+        nan_mask = ~np.isnan(x)
+        x = x[nan_mask]
+        y = y[nan_mask]
+        z = z[nan_mask]
+        ux = ux[nan_mask]
+        uy = uy[nan_mask]
+        uz = uz[nan_mask]
+        t = t[nan_mask]
 
     nx = n[0]
     ny = n[1]
