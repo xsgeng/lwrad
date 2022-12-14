@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.constants import pi, m_e, e, c, alpha, hbar, epsilon_0, mu_0
 from numba import njit, prange
+from .gpu import get_RE_spectrum_d
 from warnings import warn
 
 def get_lw_RE(x, y, z, ux, uy, uz, t, n):
@@ -108,7 +109,7 @@ def get_RE_spectrum(RE, t_ret, omega_axis):
     return RE_ft
 
 
-def get_lw_spectrum(x, y, z, ux, uy, uz, t, n, omega_axis):
+def get_lw_spectrum(x, y, z, ux, uy, uz, t, n, omega_axis, use_cuda=False):
     '''
     从坐标和动量计算LW场的频谱
 
@@ -135,7 +136,10 @@ def get_lw_spectrum(x, y, z, ux, uy, uz, t, n, omega_axis):
 
     I = np.zeros(len(omega_axis))
     for RE in (REx, REy, REz):
-        RE_ft = get_RE_spectrum(RE, t_ret, omega_axis)
+        if use_cuda:
+            RE_ft = get_RE_spectrum_d(RE, t_ret, omega_axis)
+        else:
+            RE_ft = get_RE_spectrum(RE, t_ret, omega_axis)
         I += RE_ft.real**2 + RE_ft.imag**2
     I *= 2
     return I

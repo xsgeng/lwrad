@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
-from lw import c, pi, get_lw_RE, get_RE_spectrum, get_lw_spectrum
-from timeit import timeit
+from lw import c, pi, get_lw_RE, get_RE_spectrum_d, get_RE_spectrum, get_lw_spectrum
+from time import perf_counter_ns
 
 class TestSpectrum(unittest.TestCase):
     l0 = 8e-7
@@ -47,5 +47,30 @@ class TestSpectrum(unittest.TestCase):
     def test_speed(self):
         args = self.dummy_thomson()
         n = [1, 0, 0]
-        dt = timeit(lambda: get_lw_RE(*args, n), number=100)
-        print(f"get_lw_RE: {dt*1000:.0f} ms/call")
+
+        tic = perf_counter_ns()
+        for i in range(1000):
+            get_lw_RE(*args, n)
+        dt = perf_counter_ns() - tic
+        print(f"get_lw_RE: {dt/1000*1e-3:.0f} us/call")
+
+        t_ret, REx, REy, REz = get_lw_RE(*args, n)
+        omega0 = self.omega0
+        nomega = 256
+        gamma0 = 5.0
+
+        omega_axis = np.linspace(0, 3, nomega) * 4*gamma0**2*omega0
+
+        get_RE_spectrum(REy, t_ret, omega_axis)
+        tic = perf_counter_ns()
+        for i in range(1000):
+            get_RE_spectrum(REy, t_ret, omega_axis)
+        dt = perf_counter_ns() - tic
+        print(f"get_RE_spectrum: {dt/1000*1e-3:.0f} us/call")
+        
+        get_RE_spectrum_d(REy, t_ret, omega_axis)
+        tic = perf_counter_ns()
+        for i in range(1000):
+            get_RE_spectrum_d(REy, t_ret, omega_axis)
+        dt = perf_counter_ns() - tic
+        print(f"get_RE_spectrum_d: {dt/1000*1e-3:.0f} us/call")
