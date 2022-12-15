@@ -113,5 +113,22 @@ for RE in (REx, REy, REz):
 I *= 2
 ```
 
+## 提升性能
+### 同时运算多个粒子
+将轨迹的二维矩阵直接作为输入参数
+
+矩阵的第一个维度是时间，第二个维度是不同粒子。
+```python
+for itheta in range(ntheta):
+    theta = theta_axis[itheta]
+    n = [np.cos(theta), np.sin(theta), 0]
+    spectrum[itheta, :] += lw.get_lw_spectrum(x, y, z, ux, uy, uz, t, n, omega_axis)
+```
+其中`x.shape = (nt, nparticle)`
+
+### 借助GPU加速
+```python
+lw.get_lw_spectrum(x, y, z, ux, uy, uz, t, n, omega_axis, use_cuda=True)
+```
 ## 参考文献
 Richard (2012) ([DOI: 10.5281/zenodo.843510](https://doi.org/10.5281/zenodo.843510)) (2.32)、(2.36)、(2.39)式
