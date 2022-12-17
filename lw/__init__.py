@@ -29,6 +29,7 @@ def get_lw_RE(x, y, z, ux, uy, uz, t, n):
         uy = uy[nan_mask]
         uz = uz[nan_mask]
         t = t[nan_mask]
+    
 
     nx = n[0]
     ny = n[1]
@@ -140,9 +141,66 @@ def get_RE_spectrum_2d(RE, t_ret, omega_axis):
     # normalize
     return RE_ft
 
-def get_lw_spectrum(
+def _get_lw_spectrum1d(
     x, y, z, ux, uy, uz, t, n, omega_axis, 
     use_cuda=False
+):
+    if use_cuda:
+        try:
+            from .gpu import get_RE_spectrum_d
+        except ImportError as e:
+            raise e
+
+    nomega = len(omega_axis)
+    t_ret, REx, REy, REz = get_lw_RE(x, y, z, ux, uy, uz, t, n)
+    I = np.zeros(nomega)
+    for RE in (REx, REy, REz):
+        if use_cuda:
+            RE_ft = get_RE_spectrum_d(RE, t_ret, omega_axis)
+        else:
+            RE_ft = get_RE_spectrum(RE, t_ret, omega_axis)
+        I += RE_ft.real**2 + RE_ft.imag**2
+    I *= 2
+    return I
+    
+
+def _get_lw_spectrum2d(
+    x, y, z, ux, uy, uz, t, n, omega_axis, 
+    use_cuda=False
+):
+    if use_cuda:
+        try:
+            from .gpu import get_RE_spectrum_2d_d
+        except ImportError as e:
+            raise e
+
+    nt, npart = x.shape
+    nomega = len(omega_axis)
+
+    # buffer
+    t_ret = np.zeros((npart, nt-2))
+    REx = np.zeros((npart, nt-2))
+    REy = np.zeros((npart, nt-2))
+    REz = np.zeros((npart, nt-2))
+
+    for i in range(npart):
+        t_ret[i, :], REx[i, :], REy[i, :], REz[i, :] = get_lw_RE(x[:, i], y[:, i], z[:, i], ux[:, i], uy[:, i], uz[:, i], t, n)
+        
+
+    I = np.zeros((nomega, npart))
+    for RE in (REx, REy, REz):
+        if use_cuda:
+            RE_ft = get_RE_spectrum_2d_d(RE, t_ret, omega_axis)
+        else:
+            RE_ft = get_RE_spectrum_2d(RE, t_ret, omega_axis)
+        I += RE_ft.real**2 + RE_ft.imag**2
+    I *= 2
+    return I.sum(axis=1)
+
+    
+def get_lw_spectrum(
+    x, y, z, ux, uy, uz, t, n, omega_axis, 
+    use_cuda=False, check_velocity=True,
 ):
     '''
     从坐标和动量计算LW场的频谱
@@ -166,45 +224,22 @@ def get_lw_spectrum(
         返回dI/dΩdω
     '''
     ndim = x.ndim
-    nomega = len(omega_axis)
-    if use_cuda:
-        try:
-            from .gpu import get_RE_spectrum_d, get_RE_spectrum_2d_d
-        except ImportError as e:
-            raise e
 
+    if check_velocity:
+        dt = t[1:] - t[:-1]
+        if ndim == 2:
+            dt = dt[:, None]
+        vx = (x[1:, ...] - x[:-1, ...]) / dt
+        vy = (y[1:, ...] - y[:-1, ...]) / dt
+        vz = (z[1:, ...] - z[:-1, ...]) / dt
+        beta = np.sqrt(vx**2 + vy**2 + vz**2) / c
+        if (beta >= 1).any():
+            raise ValueError("speed greater than c, check input trajectories. \
+                             set `check_velocity` to False to disable check.")
 
     if ndim == 1:
-        t_ret, REx, REy, REz = get_lw_RE(x, y, z, ux, uy, uz, t, n)
-        I = np.zeros(nomega)
-        for RE in (REx, REy, REz):
-            if use_cuda:
-                RE_ft = get_RE_spectrum_d(RE, t_ret, omega_axis)
-            else:
-                RE_ft = get_RE_spectrum(RE, t_ret, omega_axis)
-            I += RE_ft.real**2 + RE_ft.imag**2
-        I *= 2
-        return I
+        return _get_lw_spectrum1d(x, y, z, ux, uy, uz, t, n, omega_axis, use_cuda)
     elif ndim == 2:
-        nt, npart = x.shape
-
-        t_ret = np.zeros((npart, nt-2))
-        REx = np.zeros((npart, nt-2))
-        REy = np.zeros((npart, nt-2))
-        REz = np.zeros((npart, nt-2))
-
-        for i in range(npart):
-            t_ret[i, :], REx[i, :], REy[i, :], REz[i, :] = get_lw_RE(x[:, i], y[:, i], z[:, i], ux[:, i], uy[:, i], uz[:, i], t, n)
-        
-
-        I = np.zeros((nomega, npart))
-        for RE in (REx, REy, REz):
-            if use_cuda:
-                RE_ft = get_RE_spectrum_2d_d(RE, t_ret, omega_axis)
-            else:
-                RE_ft = get_RE_spectrum_2d(RE, t_ret, omega_axis)
-            I += RE_ft.real**2 + RE_ft.imag**2
-        I *= 2
-        return I.sum(axis=1)
+        return _get_lw_spectrum2d(x, y, z, ux, uy, uz, t, n, omega_axis, use_cuda)
     else:
         raise TypeError("input x, y, z, ux, uy, uz must 1d vector or 2d array.")
