@@ -20,16 +20,7 @@ def get_lw_RE(x, y, z, ux, uy, uz, t, n):
     '''
 
     if np.isnan(x).any():
-        warn("NaN values detected in input vector. Discarded continue.")
-        nan_mask = ~np.isnan(x)
-        x = x[nan_mask]
-        y = y[nan_mask]
-        z = z[nan_mask]
-        ux = ux[nan_mask]
-        uy = uy[nan_mask]
-        uz = uz[nan_mask]
-        t = t[nan_mask]
-    
+        warn("NaN values detected in input vector. NaNs will be discarded.")
 
     nx = n[0]
     ny = n[1]
@@ -40,10 +31,9 @@ def get_lw_RE(x, y, z, ux, uy, uz, t, n):
         ny /= n_norm
         nz /= n_norm
 
-    return _calc_lw(x, y, z, ux, uy, uz, t, nx, ny, nz)
+    return calc_lw(x, y, z, ux, uy, uz, t, nx, ny, nz)
 
 
-@njit(parallel=True)
 def _calc_lw(x, y, z, ux, uy, uz, t, nx, ny, nz):
     nt = len(t)
     t_ret = np.zeros(nt-2)
@@ -74,7 +64,11 @@ def _calc_lw(x, y, z, ux, uy, uz, t, nx, ny, nz):
         REz[it-1] = (n_dot_a*(nz - betaz) + (n_dot_beta - 1) * az) * factor
     return t_ret, REx, REy, REz
 
-@njit
+calc_lw_mt = njit(_calc_lw, parallel=True)
+calc_lw = njit(_calc_lw)
+
+
+@njit(inline="always")
 def _calc_beta(ux, uy, uz):
     inv_gamma = 1 / np.sqrt(ux**2 + uy**2 + uz**2 + 1)
     betax = ux * inv_gamma
@@ -82,8 +76,33 @@ def _calc_beta(ux, uy, uz):
     betaz = uz * inv_gamma
     return betax, betay, betaz
 
-
 @njit(parallel=True)
+def get_RE_spectrum_mp(RE, t_ret, omega_axis):
+    '''
+    计算lw谱，不使用FFT直接积分。慢但是方便。
+
+    RE : ndarray
+        推迟势电场矢量REx, REy or REz
+    t_ret : ndarray
+        推迟时间矢量
+    omega_axis : ndarray
+        频谱的频率轴
+    '''
+    
+    nomega = len(omega_axis)
+    RE_ft = np.zeros(nomega, dtype=np.complex128)
+    norm = 1 / np.sqrt(c*mu_0) / np.sqrt(2*pi)
+    
+    # definition of Fourier transformation
+    for i in prange(nomega):
+        w = omega_axis[i]
+        # trapzoid integral
+        RE_ft[i] = np.trapz(RE * np.exp(1j*w*t_ret), t_ret) * norm
+
+    # normalize
+    return RE_ft
+
+@njit
 def get_RE_spectrum(RE, t_ret, omega_axis):
     '''
     计算lw谱，不使用FFT直接积分。慢但是方便。
@@ -101,17 +120,29 @@ def get_RE_spectrum(RE, t_ret, omega_axis):
     RE_ft = np.zeros(nomega, dtype=np.complex128)
     norm = 1 / np.sqrt(c*mu_0) / np.sqrt(2*pi)
     
-    # definition of Fourier transformation
-    for i in prange(nomega):
-        w = omega_axis[i]
-        # trapzoid integral
-        RE_ft[i] = np.trapz(RE * np.exp(1j*w*t_ret), t_ret) * norm
+    nan_mask = ~np.isnan(RE)
+    RE_ = RE[nan_mask]
+    t_ret_ = t_ret[nan_mask]
+    nt_ = len(t_ret_)
 
-    # normalize
+    buf = np.zeros(nt_, dtype='c16')
+    # definition of Fourier transformation
+    for iw in range(nomega):
+        w = omega_axis[iw]
+
+        for it in range(nt_):
+            buf[it] = RE_[it] * np.exp(1j*w*t_ret_[it])
+
+        # trapzoid integral
+        for it in range(nt_-1):
+            dt = t_ret[it+1] - t_ret[it]
+            RE_ft[iw] += 0.5*dt*(buf[it]+buf[it+1])
+        RE_ft[iw] *= norm
+
     return RE_ft
 
 @njit(parallel=True)
-def get_RE_spectrum_2d(RE, t_ret, omega_axis):
+def get_RE_spectrum_2d_mp(RE, t_ret, omega_axis):
     '''
     计算lw谱，不使用FFT直接积分。慢但是方便。
 
@@ -122,7 +153,6 @@ def get_RE_spectrum_2d(RE, t_ret, omega_axis):
     omega_axis : ndarray
         频谱的频率轴
     '''
-    assert RE.ndim == 2 and t_ret.ndim == 2 and omega_axis.ndim == 1
 
     nomega = len(omega_axis)
     npart, nt = RE.shape
@@ -131,21 +161,19 @@ def get_RE_spectrum_2d(RE, t_ret, omega_axis):
     norm = 1 / np.sqrt(c*mu_0) / np.sqrt(2*pi)
     
     # definition of Fourier transformation
-    for i in prange(nomega*npart):
-        iw = i // npart
-        ip = i % npart
-        w = omega_axis[iw]
+    for ip in prange(npart):
         # trapzoid integral
-        RE_ft[iw, ip] = np.trapz(RE[ip] * np.exp(1j*w*t_ret[ip]), t_ret[ip]) * norm
+        RE_ft[:, ip] = get_RE_spectrum(RE[ip], t_ret[ip], omega_axis)
 
     # normalize
     return RE_ft
 
+
 def _get_lw_spectrum1d(
     x, y, z, ux, uy, uz, t, n, omega_axis, 
-    use_cuda=False
+    backend='mp'
 ):
-    if use_cuda:
+    if backend:
         try:
             from .gpu import get_RE_spectrum_d
         except ImportError as e:
@@ -155,8 +183,10 @@ def _get_lw_spectrum1d(
     t_ret, REx, REy, REz = get_lw_RE(x, y, z, ux, uy, uz, t, n)
     I = np.zeros(nomega)
     for RE in (REx, REy, REz):
-        if use_cuda:
+        if backend == 'cuda':
             RE_ft = get_RE_spectrum_d(RE, t_ret, omega_axis)
+        elif backend == 'mp':
+            RE_ft = get_RE_spectrum_mp(RE, t_ret, omega_axis)
         else:
             RE_ft = get_RE_spectrum(RE, t_ret, omega_axis)
         I += RE_ft.real**2 + RE_ft.imag**2
@@ -166,9 +196,9 @@ def _get_lw_spectrum1d(
 
 def _get_lw_spectrum2d(
     x, y, z, ux, uy, uz, t, n, omega_axis, 
-    use_cuda=False
+    backend='mp'
 ):
-    if use_cuda:
+    if backend:
         try:
             from .gpu import get_RE_spectrum_2d_d
         except ImportError as e:
@@ -183,24 +213,41 @@ def _get_lw_spectrum2d(
     REy = np.zeros((npart, nt-2))
     REz = np.zeros((npart, nt-2))
 
+    I = np.zeros((nomega, npart))
+
     for i in range(npart):
         t_ret[i, :], REx[i, :], REy[i, :], REz[i, :] = get_lw_RE(x[:, i], y[:, i], z[:, i], ux[:, i], uy[:, i], uz[:, i], t, n)
         
-
-    I = np.zeros((nomega, npart))
     for RE in (REx, REy, REz):
-        if use_cuda:
+        if backend == 'cuda':
             RE_ft = get_RE_spectrum_2d_d(RE, t_ret, omega_axis)
+        elif backend == 'mp':
+            RE_ft = get_RE_spectrum_2d_mp(RE, t_ret, omega_axis)
         else:
-            RE_ft = get_RE_spectrum_2d(RE, t_ret, omega_axis)
+            RE_ft = get_RE_spectrum_2d_mp(RE, t_ret, omega_axis)
         I += RE_ft.real**2 + RE_ft.imag**2
     I *= 2
     return I.sum(axis=1)
 
     
+def _check_velocity(t, x, y, z):
+    ndim = x.ndim
+
+    dt = t[1:] - t[:-1]
+    if ndim == 2:
+        dt = dt[:, None]
+    vx = (x[1:, ...] - x[:-1, ...]) / dt
+    vy = (y[1:, ...] - y[:-1, ...]) / dt
+    vz = (z[1:, ...] - z[:-1, ...]) / dt
+    beta = np.sqrt(vx**2 + vy**2 + vz**2) / c
+    if (beta >= 1).any():
+        raise ValueError("speed greater than c, check input trajectories. \
+                            set `check_velocity` to False to disable check.")
+    
+
 def get_lw_spectrum(
     x, y, z, ux, uy, uz, t, n, omega_axis, 
-    use_cuda=False, check_velocity=True,
+    backend='mp', check_velocity=True,
 ):
     '''
     从坐标和动量计算LW场的频谱
@@ -217,8 +264,8 @@ def get_lw_spectrum(
         长度为1的方向矢量
     omega_axis : ndarray
         频谱的频率轴
-    use_cuda : bool
-        是否用gpu计算频谱，需要安装cupy
+    backend : str
+        mp | cuda | None
     check_velocity : bool
         是否检查xyz的轨迹是否超过光速
     
@@ -227,24 +274,23 @@ def get_lw_spectrum(
     I: ndarray
         返回dI/dΩdω
     '''
-    ndim = x.ndim
+
+    assert backend in ['mp', 'cuda', None]
+    assert omega_axis.ndim == 1
+    
 
     if check_velocity:
-        dt = t[1:] - t[:-1]
-        if ndim == 2:
-            dt = dt[:, None]
-        vx = (x[1:, ...] - x[:-1, ...]) / dt
-        vy = (y[1:, ...] - y[:-1, ...]) / dt
-        vz = (z[1:, ...] - z[:-1, ...]) / dt
-        beta = np.sqrt(vx**2 + vy**2 + vz**2) / c
-        if (beta >= 1).any():
-            raise ValueError("speed greater than c, check input trajectories. \
-                             set `check_velocity` to False to disable check.")
+        _check_velocity(t, x, y, z)
 
-    if ndim == 1:
-        return _get_lw_spectrum1d(x, y, z, ux, uy, uz, t, n, omega_axis, use_cuda)
-    elif ndim == 2:
-        return _get_lw_spectrum2d(x, y, z, ux, uy, uz, t, n, omega_axis, use_cuda)
+    if x.ndim == 1:
+        return _get_lw_spectrum1d(x, y, z, ux, uy, uz, t, n, omega_axis, backend)
+    elif x.ndim == 2:
+        if len(t) == x.shape[0]:
+            return _get_lw_spectrum2d(x, y, z, ux, uy, uz, t, n, omega_axis, backend)
+        elif len(t) == x.shape[1]:
+            return _get_lw_spectrum2d(x.T, y.T, z.T, ux.T, uy.T, uz.T, t, n, omega_axis, backend)
+        else:
+            raise TypeError("length of t does not match input 2d trajectory.")
     else:
         raise TypeError("input x, y, z, ux, uy, uz must 1d vector or 2d array.")
 

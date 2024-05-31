@@ -35,10 +35,10 @@ class TestSpeed(unittest.TestCase):
         self.omega_axis = np.linspace(0, 3, nomega) * 4*gamma0**2*omega0
 
     def test_cpu(self):
-        get_lw_spectrum(*self.args, self.n, self.omega_axis)
+        get_lw_spectrum(*self.args, self.n, self.omega_axis, backend=None)
         tic = perf_counter_ns()
         for _ in range(100):
-            get_lw_spectrum(*self.args, self.n, self.omega_axis)
+            get_lw_spectrum(*self.args, self.n, self.omega_axis, backend=None)
         dt = perf_counter_ns() - tic
         print(f"get_lw_spectrum on cpu: {dt/100*1e-6:.0f} ms/call")
 
