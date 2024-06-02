@@ -1,7 +1,11 @@
 import unittest
+
 import numpy as np
-from lw import c, pi, get_lw_RE, get_lw_spectrum
-from time import perf_counter_ns
+from scipy.constants import c, pi
+
+from lw import get_lw_spectrum
+from lw.cpu import get_lw_RE
+
 
 class TestSpectrum(unittest.TestCase):
     l0 = 8e-7

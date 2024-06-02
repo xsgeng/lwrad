@@ -1,8 +1,12 @@
 
 import unittest
-import numpy as np
-from lw import c, pi, get_lw_spectrum
 from time import perf_counter_ns
+
+import numpy as np
+from scipy.constants import c, pi
+
+from lw import get_lw_spectrum
+
 
 def dummy_thomson():
     import h5py
