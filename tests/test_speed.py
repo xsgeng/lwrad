@@ -54,7 +54,7 @@ class TestSpeed(unittest.TestCase):
 
     def test_cuda(self):
         try:
-            from lw.gpu import get_lw_spectrum_cuda
+            from lw.cuda import get_lw_spectrum_cuda
         except ImportError as e:
             print("CUDA not available")
         get_lw_spectrum_cuda(*self.args, self.n, self.omega_axis)
@@ -66,7 +66,7 @@ class TestSpeed(unittest.TestCase):
 
     def test_cuda_multiple(self):
         try:
-            from lw.gpu import get_lw_spectrum_2d_cuda
+            from lw.cuda import get_lw_spectrum_2d_cuda
         except ImportError as e:
             print("CUDA not available")
         
