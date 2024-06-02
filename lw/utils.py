@@ -1,5 +1,6 @@
 
 import numpy as np
+from tqdm.auto import trange
 
 from .cpu import c, get_lw_spectrum_2d_cpu, get_lw_spectrum_cpu
 
@@ -39,7 +40,7 @@ def get_lw_spectrum(
     omega_axis : ndarray
         频谱的频率轴
     backend : str
-        mp | cuda | None
+        mt | cuda | None
     check_velocity : bool
         是否检查xyz的轨迹是否超过光速
     
@@ -99,7 +100,7 @@ def get_lw_angular_spectrum(
     x, y, z, ux, uy, uz, t, omega_axis,
     theta_max, ntheta, theta_min=0.0,
     direction="x", theta_plane="xy",
-    use_cuda=False, check_velocity=True,
+    backend='mt', check_velocity=True,
 ):
     '''
     从坐标和动量计算LW场的频谱
@@ -160,8 +161,8 @@ def get_lw_angular_spectrum(
     # TODO: 
     # 多个角度调用2d函数,
     # jit函数分段sum
-    for itheta in range(ntheta):
+    for itheta in trange(ntheta):
         theta = theta_axis[itheta]
-        spectrum[itheta, :] += get_lw_spectrum(x, y, z, ux, uy, uz, t, n(theta), omega_axis, use_cuda, check_velocity)
+        spectrum[itheta, :] += get_lw_spectrum(x, y, z, ux, uy, uz, t, n(theta), omega_axis, backend, check_velocity)
     
     return theta_axis, spectrum
