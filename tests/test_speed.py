@@ -50,3 +50,29 @@ class TestSpeed(unittest.TestCase):
             get_lw_spectrum(*self.args_multiple, self.n, self.omega_axis)
         dt = perf_counter_ns() - tic
         print(f"get_lw_spectrum on cpu: {dt/100*1e-6:.0f} ms/call")
+
+
+    def test_cuda(self):
+        try:
+            from lw.gpu import get_lw_spectrum_cuda
+        except ImportError as e:
+            print("CUDA not available")
+        get_lw_spectrum_cuda(*self.args, self.n, self.omega_axis)
+        tic = perf_counter_ns()
+        for _ in range(100):
+            get_lw_spectrum_cuda(*self.args, self.n, self.omega_axis)
+        dt = perf_counter_ns() - tic
+        print(f"get_lw_spectrum on cpu: {dt/100*1e-6:.0f} ms/call")
+
+    def test_cuda_multiple(self):
+        try:
+            from lw.gpu import get_lw_spectrum_2d_cuda
+        except ImportError as e:
+            print("CUDA not available")
+        
+        get_lw_spectrum_2d_cuda(*self.args_multiple, self.n, self.omega_axis)
+        tic = perf_counter_ns()
+        for _ in range(100):
+            get_lw_spectrum(*self.args_multiple, self.n, self.omega_axis)
+        dt = perf_counter_ns() - tic
+        print(f"get_lw_spectrum on cpu: {dt/100*1e-6:.0f} ms/call")

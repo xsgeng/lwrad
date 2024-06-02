@@ -77,7 +77,7 @@ def _calc_beta(ux, uy, uz):
     return betax, betay, betaz
 
 @njit(parallel=True)
-def get_RE_spectrum_mp(RE, t_ret, omega_axis):
+def get_RE_spectrum_mt(RE, t_ret, omega_axis):
     '''
     计算lw谱，不使用FFT直接积分。慢但是方便。
 
@@ -103,7 +103,7 @@ def get_RE_spectrum_mp(RE, t_ret, omega_axis):
     return RE_ft
 
 @njit
-def get_RE_spectrum(RE, t_ret, omega_axis):
+def get_RE_spectrum_st(RE, t_ret, omega_axis):
     '''
     计算lw谱，不使用FFT直接积分。慢但是方便。
 
@@ -142,7 +142,7 @@ def get_RE_spectrum(RE, t_ret, omega_axis):
     return RE_ft
 
 @njit(parallel=True)
-def get_RE_spectrum_2d_mp(RE, t_ret, omega_axis):
+def get_RE_spectrum_2d_mt(RE, t_ret, omega_axis):
     '''
     计算lw谱，不使用FFT直接积分。慢但是方便。
 
@@ -163,47 +163,35 @@ def get_RE_spectrum_2d_mp(RE, t_ret, omega_axis):
     # definition of Fourier transformation
     for ip in prange(npart):
         # trapzoid integral
-        RE_ft[:, ip] = get_RE_spectrum(RE[ip], t_ret[ip], omega_axis)
+        RE_ft[:, ip] = get_RE_spectrum_st(RE[ip], t_ret[ip], omega_axis)
 
     # normalize
     return RE_ft
 
+get_RE_spectrum_2d_st = njit(get_RE_spectrum_2d_mt.py_func)
 
-def _get_lw_spectrum1d(
+
+def get_lw_spectrum_cpu(
     x, y, z, ux, uy, uz, t, n, omega_axis, 
-    backend='mp'
+    mt=True,
 ):
-    if backend:
-        try:
-            from .gpu import get_RE_spectrum_d
-        except ImportError as e:
-            raise e
-
     nomega = len(omega_axis)
     t_ret, REx, REy, REz = get_lw_RE(x, y, z, ux, uy, uz, t, n)
     I = np.zeros(nomega)
     for RE in (REx, REy, REz):
-        if backend == 'cuda':
-            RE_ft = get_RE_spectrum_d(RE, t_ret, omega_axis)
-        elif backend == 'mp':
-            RE_ft = get_RE_spectrum_mp(RE, t_ret, omega_axis)
+        if mt:
+            RE_ft = get_RE_spectrum_mt(RE, t_ret, omega_axis)
         else:
-            RE_ft = get_RE_spectrum(RE, t_ret, omega_axis)
+            RE_ft = get_RE_spectrum_st(RE, t_ret, omega_axis)
         I += RE_ft.real**2 + RE_ft.imag**2
     I *= 2
     return I
     
 
-def _get_lw_spectrum2d(
+def get_lw_spectrum_2d_cpu(
     x, y, z, ux, uy, uz, t, n, omega_axis, 
-    backend='mp'
+    mt=True,
 ):
-    if backend:
-        try:
-            from .gpu import get_RE_spectrum_2d_d
-        except ImportError as e:
-            raise e
-
     nt, npart = x.shape
     nomega = len(omega_axis)
 
@@ -219,12 +207,10 @@ def _get_lw_spectrum2d(
         t_ret[i, :], REx[i, :], REy[i, :], REz[i, :] = get_lw_RE(x[:, i], y[:, i], z[:, i], ux[:, i], uy[:, i], uz[:, i], t, n)
         
     for RE in (REx, REy, REz):
-        if backend == 'cuda':
-            RE_ft = get_RE_spectrum_2d_d(RE, t_ret, omega_axis)
-        elif backend == 'mp':
-            RE_ft = get_RE_spectrum_2d_mp(RE, t_ret, omega_axis)
+        if mt:
+            RE_ft = get_RE_spectrum_2d_mt(RE, t_ret, omega_axis)
         else:
-            RE_ft = get_RE_spectrum_2d_mp(RE, t_ret, omega_axis)
+            RE_ft = get_RE_spectrum_2d_st(RE, t_ret, omega_axis)
         I += RE_ft.real**2 + RE_ft.imag**2
     I *= 2
     return I.sum(axis=1)
@@ -247,7 +233,7 @@ def _check_velocity(t, x, y, z):
 
 def get_lw_spectrum(
     x, y, z, ux, uy, uz, t, n, omega_axis, 
-    backend='mp', check_velocity=True,
+    backend='mt', check_velocity=True,
 ):
     '''
     从坐标和动量计算LW场的频谱
@@ -275,20 +261,46 @@ def get_lw_spectrum(
         返回dI/dΩdω
     '''
 
-    assert backend in ['mp', 'cuda', None]
+    assert backend in ['mt', 'cuda', None]
     assert omega_axis.ndim == 1
     
-
+    if backend=='cuda':
+        try:
+            from .gpu import get_lw_spectrum_cuda, get_lw_spectrum_2d_cuda
+        except ImportError as e:
+            raise e
+        
     if check_velocity:
         _check_velocity(t, x, y, z)
-
+    
+    args = (x, y, z, ux, uy, uz, t, n, omega_axis)
+    argsT = (x.T, y.T, z.T, ux.T, uy.T, uz.T, t, n, omega_axis)
     if x.ndim == 1:
-        return _get_lw_spectrum1d(x, y, z, ux, uy, uz, t, n, omega_axis, backend)
+        if backend=='cuda':
+            return get_lw_spectrum_cuda(*args)
+        if backend == 'mt':
+            return get_lw_spectrum_cpu(*args, mt=True)
+        if backend is None:
+            return get_lw_spectrum_cpu(*args, mt=False)
+        
     elif x.ndim == 2:
-        if len(t) == x.shape[0]:
-            return _get_lw_spectrum2d(x, y, z, ux, uy, uz, t, n, omega_axis, backend)
-        elif len(t) == x.shape[1]:
-            return _get_lw_spectrum2d(x.T, y.T, z.T, ux.T, uy.T, uz.T, t, n, omega_axis, backend)
+        if x.shape[0] == x.shape[1]:
+            print("input trajectory is a square matrix, assume the 2nd axis is time.")
+        
+        if len(t) == x.shape[1]:
+            if backend=='cuda':
+                return get_lw_spectrum_2d_cuda(*argsT)
+            if backend == 'mt':
+                return get_lw_spectrum_2d_cpu(*argsT, mt=True)
+            if backend is None:
+                return get_lw_spectrum_2d_cpu(*argsT, mt=False)
+        elif len(t) == x.shape[0]:
+            if backend=='cuda':
+                return get_lw_spectrum_2d_cuda(*args)
+            if backend == 'mt':
+                return get_lw_spectrum_2d_cpu(*args, mt=True)
+            if backend is None:
+                return get_lw_spectrum_2d_cpu(*args, mt=False)
         else:
             raise TypeError("length of t does not match input 2d trajectory.")
     else:
