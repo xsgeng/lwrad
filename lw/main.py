@@ -85,6 +85,7 @@ def main(
     theta_plane: Annotated[str, typer.Option(help='xy | xz | yz')]='xy',
     backend: Annotated[str, typer.Option(help="mt | cuda | None")]='mt',
     check_velocity: Annotated[bool, typer.Option()]=True,
+    savefig: Annotated[bool, typer.Option()]=False,
 ):
     """
     Calculate angular radiation spectrum from relativistic particle trajectories using Lienard-Wiechert potentials.
@@ -125,3 +126,17 @@ def main(
         savepath = path if path.is_dir() else path.parent
         np.savetxt(savepath/'theta_axis.txt', theta_axis)
         np.savetxt(savepath/'spectrum.txt', spectrum)
+        if savefig:
+            try:
+                import matplotlib.pyplot as plt
+            except ImportError as e:
+                raise e
+            fig, ax = plt.subplots(layout='tight')
+            h = ax.imshow(
+                spectrum,
+                extent = [ek_axis[0], ek_axis[-1], theta_axis[0], theta_axis[-1]],
+                aspect='auto',
+                origin='lower'
+            )
+            fig.colorbar(h, ax=ax)
+            fig.savefig(savepath/'spectrum.png', dpi=300)
