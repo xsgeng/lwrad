@@ -2,23 +2,57 @@
 
 ### 克隆仓库
 ```bash
-git clone http://172.16.95.131/gengxs/pylw.git
+git clone https://github.com/xsgeng/py-lw.git
 ```
 
 然后用户安装
 ```bash
-cd pylw
+cd py-lw
 # editable install
 pip install --user -e .
 ```
 
 ### 直接安装
 ```bash
-pip install --user git+http://172.16.95.131/gengxs/pylw.git
+pip install --user git+https://github.com/xsgeng/py-lw.git
 ```
 
 ## 用法
+### CLI
+```bash
+# help
+python -m lw --help
 
+# smilei TrackParticles
+python -m lw \
+--smilei \
+--ek-max 1.0 \
+--nek 128 \
+--theta-max 0.5 \
+--ntheta 128 \
+--direction x \
+--theta-plane xy \
+--savefig \
+smilei/result/path \
+species_name
+
+# EPOCH
+# TODO
+```
+
+CUDA加速
+```bash
+python -m lw --backend cuda [OPTIONS] PATH NAME
+```
+
+MPI
+```bash
+# multithreaded MPI
+srun -n 2 -c 32 -u python -m lw [OPTIONS] PATH NAME
+# 1 thread per MPI
+srun -n 64 -u python -m lw --backend None [OPTIONS] PATH NAME
+```
+## script
 这里以Smilei输出的轨迹为例
 ```python
 import h5py
@@ -41,7 +75,7 @@ with h5py.File("tests/test.h5", "r") as f:
     t = np.arange(len(ux)) * f.attrs['dt'] / 2/pi * l0/c
 ```
 
-### 直接计算辐射谱
+直接计算辐射谱
 ```python
 from lw import get_lw_spectrum
 
@@ -95,40 +129,5 @@ ax.set_title(rf'$a_0$={a0},$\gamma_0$={gamma0}')
 ![](tests/thomson.png)
 结果对比[Richard (2012)](https://doi.org/10.5281/zenodo.843510) Figure 2.7(a)
 
-### 计算辐射电场$`R\cdot \bf{E}`$
-```python
-from lw import get_lw_RE
-
-t_ret, REx, REy, REz = get_lw_RE(x, y, z, ux, uy, uz, t, n)
-```
-
-### 由$`R\cdot \bf{E}`$计算辐射谱
-```python
-from lw import get_RE_spectrum
-
-I = np.zeros(len(omega_axis))
-for RE in (REx, REy, REz):
-    RE_ft = get_RE_spectrum(RE, t_ret, omega_axis)
-    I += RE_ft.real**2 + RE_ft.imag**2
-I *= 2
-```
-
-## 提升性能
-### 同时运算多个粒子
-将轨迹的二维矩阵直接作为输入参数
-
-矩阵的第一个维度是时间，第二个维度是不同粒子。
-```python
-for itheta in range(ntheta):
-    theta = theta_axis[itheta]
-    n = [np.cos(theta), np.sin(theta), 0]
-    spectrum[itheta, :] += lw.get_lw_spectrum(x, y, z, ux, uy, uz, t, n, omega_axis)
-```
-其中`x.shape = (nt, nparticle)`
-
-### 借助GPU加速
-```python
-lw.get_lw_spectrum(x, y, z, ux, uy, uz, t, n, omega_axis, use_cuda=True)
-```
 ## 参考文献
 Richard (2012) ([DOI: 10.5281/zenodo.843510](https://doi.org/10.5281/zenodo.843510)) (2.32)、(2.36)、(2.39)式
