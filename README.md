@@ -2,29 +2,29 @@
 
 ### 克隆仓库
 ```bash
-git clone https://github.com/xsgeng/py-lw.git
+git clone https://github.com/xsgeng/lwrad.git
 ```
 
 然后用户安装
 ```bash
-cd py-lw
+cd lwrad
 # editable install
 pip install --user -e .
 ```
 
 ### 直接安装
 ```bash
-pip install --user git+https://github.com/xsgeng/py-lw.git
+pip install --user git+https://github.com/xsgeng/lwrad.git
 ```
 
 ## 用法
 ### CLI
 ```bash
 # help
-python -m lw --help
+python -m lwrad --help
 
 # smilei TrackParticles
-python -m lw \
+python -m lwrad \
 --smilei \
 --ek-max 1.0 \
 --nek 128 \
@@ -42,15 +42,15 @@ species_name
 
 CUDA加速
 ```bash
-python -m lw --backend cuda [OPTIONS] PATH NAME
+python -m lwrad --backend cuda [OPTIONS] PATH NAME
 ```
 
 MPI
 ```bash
 # multithreaded MPI
-srun -n 2 -c 32 -u python -m lw [OPTIONS] PATH NAME
+srun -n 2 -c 32 -u python -m lwrad [OPTIONS] PATH NAME
 # 1 thread per MPI
-srun -n 64 -u python -m lw --backend None [OPTIONS] PATH NAME
+srun -n 64 -u python -m lwrad --backend None [OPTIONS] PATH NAME
 ```
 ## script
 这里以Smilei输出的轨迹为例
@@ -77,7 +77,7 @@ with h5py.File("tests/test.h5", "r") as f:
 
 直接计算辐射谱
 ```python
-from lw import get_lw_spectrum
+from lwrad import get_lw_spectrum
 
 # 用于确定角度范围
 gamma0 = 5.0

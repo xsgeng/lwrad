@@ -5,7 +5,7 @@ from time import perf_counter_ns
 import numpy as np
 from scipy.constants import c, pi
 
-from lw import get_lw_spectrum
+from lwrad import get_lw_spectrum
 
 
 def dummy_thomson():
@@ -53,12 +53,12 @@ class TestSpeed(unittest.TestCase):
         for _ in range(100):
             get_lw_spectrum(*self.args_multiple, self.n, self.omega_axis)
         dt = perf_counter_ns() - tic
-        print(f"get_lw_spectrum on cpu: {dt/100*1e-6:.0f} ms/call")
+        print(f"get_lw_spectrum 2d on cpu: {dt/100*1e-6:.0f} ms/call")
 
 
     def test_cuda(self):
         try:
-            from lw.cuda import get_lw_spectrum_cuda
+            from lwrad.cuda import get_lw_spectrum_cuda
         except ImportError as e:
             print("CUDA not available")
         get_lw_spectrum_cuda(*self.args, self.n, self.omega_axis)
@@ -66,11 +66,11 @@ class TestSpeed(unittest.TestCase):
         for _ in range(100):
             get_lw_spectrum_cuda(*self.args, self.n, self.omega_axis)
         dt = perf_counter_ns() - tic
-        print(f"get_lw_spectrum on cpu: {dt/100*1e-6:.0f} ms/call")
+        print(f"get_lw_spectrum_cuda: {dt/100*1e-6:.0f} ms/call")
 
     def test_cuda_multiple(self):
         try:
-            from lw.cuda import get_lw_spectrum_2d_cuda
+            from lwrad.cuda import get_lw_spectrum_2d_cuda
         except ImportError as e:
             print("CUDA not available")
         
@@ -79,4 +79,4 @@ class TestSpeed(unittest.TestCase):
         for _ in range(100):
             get_lw_spectrum(*self.args_multiple, self.n, self.omega_axis)
         dt = perf_counter_ns() - tic
-        print(f"get_lw_spectrum on cpu: {dt/100*1e-6:.0f} ms/call")
+        print(f"get_lw_spectrum_2d_cuda: {dt/100*1e-6:.0f} ms/call")

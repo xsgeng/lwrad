@@ -1,5 +1,5 @@
 [project]
-name = "py-lw"
+name = "lw-rad"
 version = "0.5.3"
 dependencies = [
     "typer",
@@ -9,4 +9,4 @@ dependencies = [
     "numba",
     "scipy",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.9"
