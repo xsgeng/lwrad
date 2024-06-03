@@ -1,6 +1,6 @@
 [project]
-name = "pylw"
-version = "0.5.2"
+name = "py-lw"
+version = "0.5.3"
 dependencies = [
     "typer",
     "tqdm",
