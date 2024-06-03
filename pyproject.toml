@@ -1,6 +1,19 @@
 [project]
-name = "lw-rad"
+name = "lwrad"
 version = "0.5.3"
+description = "Calculating the radiation spectrum of relativistic particles using the Lienard-Wiechert potential."
+authors = [
+  {name = "xsgeng", email = "xsgeng@siom.ac.cn"}
+]
+license = {file = "LICENSE"}
+readme = "README.md"
+keywords = ["Radiation Spectrum", "Plasma Physics"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Researchers",
+  "Programming Language :: Python :: 3.9",
+]
+
 dependencies = [
     "typer",
     "tqdm",
@@ -10,3 +23,6 @@ dependencies = [
     "scipy",
 ]
 requires-python = ">=3.9"
+
+[project.urls]
+Repository = "https://github.com/xsgeng/lwrad.git"
