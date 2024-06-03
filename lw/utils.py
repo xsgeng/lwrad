@@ -101,6 +101,7 @@ def get_lw_angular_spectrum(
     theta_max, ntheta, theta_min=0.0,
     direction="x", theta_plane="xy",
     backend='mt', check_velocity=True,
+    comm=None,
 ):
     '''
     从坐标和动量计算LW场的频谱
@@ -161,8 +162,19 @@ def get_lw_angular_spectrum(
     # TODO: 
     # 多个角度调用2d函数,
     # jit函数分段sum
-    for itheta in trange(ntheta):
+    
+    if comm:
+        rank = comm.Get_rank()
+        comm_size = comm.Get_size()
+    else:
+        rank = 0
+        comm_size = 1
+        
+    for itheta in trange(rank, ntheta, comm_size, position=rank):
         theta = theta_axis[itheta]
         spectrum[itheta, :] += get_lw_spectrum(x, y, z, ux, uy, uz, t, n(theta), omega_axis, backend, check_velocity)
     
+    if comm_size > 1:
+        spectrum = comm.reduce(spectrum)
+        
     return theta_axis, spectrum

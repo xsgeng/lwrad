@@ -65,6 +65,7 @@ def smilei(path: Path, name: str):
         
         t = f['Times']*dtSI
         args.append(t)
+    print(f"shape of input trajectory: x.shape={x.shape}, t.shape={t.shape}")
         
     return args
         
@@ -85,6 +86,9 @@ def main(
     backend: Annotated[str, typer.Option(help="mt | cuda | None")]='mt',
     check_velocity: Annotated[bool, typer.Option()]=True,
 ):
+    """
+    Calculate angular radiation spectrum from relativistic particle trajectories using Lienard-Wiechert potentials.
+    """
     if from_smilei:
         assert name is not None, "Name of particle must be specified for Smilei files."
         args = smilei(path, name)
@@ -93,6 +97,16 @@ def main(
         args = epoch(path, name)
     else:
         args = generic(path)
+        
+    try:
+        from mpi4py.MPI import COMM_WORLD as comm
+        rank = comm.Get_rank()
+    except ImportError:
+        comm = None
+        rank = 0
+        
+    if backend == 'None':
+        backend = None
         
     ek_axis = np.linspace(0, ek_max, nek)
     omega_axis = ek_axis*1e6/1.55*2.35e15
@@ -104,7 +118,10 @@ def main(
         direction=direction, 
         theta_plane=theta_plane, 
         backend=backend, 
-        check_velocity=check_velocity
+        check_velocity=check_velocity,
+        comm=comm
     )
-    np.savetxt(path/'theta_axis.txt', theta_axis)
-    np.savetxt(path/'spectrum.txt', spectrum)
+    if rank == 0:
+        savepath = path if path.is_dir() else path.parent
+        np.savetxt(savepath/'theta_axis.txt', theta_axis)
+        np.savetxt(savepath/'spectrum.txt', spectrum)
