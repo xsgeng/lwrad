@@ -10,7 +10,7 @@ readme = "README.md"
 keywords = ["Radiation Spectrum", "Plasma Physics"]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "Intended Audience :: Researchers",
+  "Intended Audience :: Science/Research",
   "Programming Language :: Python :: 3.9",
 ]
 
