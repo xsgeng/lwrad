@@ -79,7 +79,7 @@ def _calc_beta(ux, uy, uz):
 @njit(parallel=True)
 def get_RE_spectrum_mt(RE, t_ret, omega_axis):
     '''
-    计算lw谱，不使用FFT直接积分。慢但是方便。
+    计算lw谱，不使用FFT直接积分。优化内存使用。
 
     RE : ndarray
         推迟势电场矢量REx, REy or REz
@@ -92,14 +92,20 @@ def get_RE_spectrum_mt(RE, t_ret, omega_axis):
     nomega = len(omega_axis)
     RE_ft = np.zeros(nomega, dtype=np.complex128)
     norm = 1 / np.sqrt(c*mu_0) / np.sqrt(2*pi)
+    nt = len(t_ret)
     
     # definition of Fourier transformation
     for i in prange(nomega):
         w = omega_axis[i]
-        # trapzoid integral
-        RE_ft[i] = np.trapz(RE * np.exp(1j*w*t_ret), t_ret) * norm
+        # manual trapezoidal integration
+        integral = 0.0 + 0.0j
+        for j in range(nt - 1):
+            dt = t_ret[j+1] - t_ret[j]
+            val1 = RE[j] * np.exp(1j*w*t_ret[j])
+            val2 = RE[j+1] * np.exp(1j*w*t_ret[j+1])
+            integral += 0.5 * dt * (val1 + val2)
+        RE_ft[i] = integral * norm
 
-    # normalize
     return RE_ft
 
 @njit
