@@ -1,6 +1,6 @@
 [project]
 name = "lwrad"
-version = "0.5.3"
+version = "0.5.4"
 description = "Calculating the radiation spectrum of relativistic particles using the Lienard-Wiechert potential."
 authors = [
   {name = "xsgeng", email = "xsgeng@siom.ac.cn"}
