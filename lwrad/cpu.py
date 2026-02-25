@@ -92,17 +92,22 @@ def get_RE_spectrum_mt(RE, t_ret, omega_axis):
     nomega = len(omega_axis)
     RE_ft = np.zeros(nomega, dtype=np.complex128)
     norm = 1 / np.sqrt(c*mu_0) / np.sqrt(2*pi)
-    nt = len(t_ret)
+
+    # Handle NaN values by masking them out
+    nan_mask = ~np.isnan(RE)
+    RE_ = RE[nan_mask]
+    t_ret_ = t_ret[nan_mask]
+    nt_ = len(t_ret_)
     
     # definition of Fourier transformation
     for i in prange(nomega):
         w = omega_axis[i]
         # manual trapezoidal integration
         integral = 0.0 + 0.0j
-        for j in range(nt - 1):
-            dt = t_ret[j+1] - t_ret[j]
-            val1 = RE[j] * np.exp(1j*w*t_ret[j])
-            val2 = RE[j+1] * np.exp(1j*w*t_ret[j+1])
+        for j in range(nt_ - 1):
+            dt = t_ret_[j+1] - t_ret_[j]
+            val1 = RE_[j] * np.exp(1j*w*t_ret_[j])
+            val2 = RE_[j+1] * np.exp(1j*w*t_ret_[j+1])
             integral += 0.5 * dt * (val1 + val2)
         RE_ft[i] = integral * norm
 
